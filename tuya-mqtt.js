@@ -13,6 +13,8 @@ const utils = require('./lib/utils')
 
 var CONFIG = undefined
 var tuyaDevices = new Array()
+var mqttClient = undefined
+var will_topic = undefined
 
 // Setup Exit Handlers
 process.on('exit', processExit.bind(null, {}))
@@ -48,7 +50,10 @@ function getDevice(configDevice, mqttClient) {
     const deviceInfo = {
         configDevice: configDevice,
         mqttClient: mqttClient,
-        topic: CONFIG.topic
+        topic: CONFIG.topic,
+        qos: CONFIG.qos,
+        retain_status_topic: CONFIG.retain_status_topic,
+        publish_homeassistant_discovery: CONFIG.publish_homeassistant_discovery 
     }
     switch (configDevice.type) {
         case 'SimpleSwitch':
@@ -83,7 +88,6 @@ async function republishDevices() {
 // Main code function
 const main = async() => {
     let configDevices
-    let mqttClient
 
     try {
         CONFIG = json5.parse(fs.readFileSync('./config.json', 'utf-8'))
@@ -93,12 +97,19 @@ const main = async() => {
         process.exit(1)
     }
 
-    if (typeof CONFIG.qos === undefined) {
+    if (typeof CONFIG.qos === 'undefined') {
         CONFIG.qos = 1
     }
-    if (typeof CONFIG.retain === undefined) {
-        CONFIG.retain = false
+    if (typeof CONFIG.retain_status_topic === 'undefined') {
+        CONFIG.retain_status_topic = false
     }
+    if (typeof CONFIG.monitored_birth_topic === 'undefined') {
+        CONFIG.monitored_birth_topic = "homeassistant/status"
+    }
+    if (typeof CONFIG.publish_homeassistant_discovery === 'undefined') {
+        CONFIG.publish_homeassistant_discovery = true
+    }
+    
 
     try {
         configDevices = fs.readFileSync('./devices.conf', 'utf8')
@@ -114,19 +125,32 @@ const main = async() => {
         process.exit(1)
     }
 
+    will_topic = CONFIG.topic + 'script_status'
+
+    let initialization_complete = false
     mqttClient = mqtt.connect({
         host: CONFIG.host,
         port: CONFIG.port,
         username: CONFIG.mqtt_user,
         password: CONFIG.mqtt_pass,
+        will: {
+          topic: will_topic,
+          payload: 'offline', //TODO: add publishing this on clean disconnect as well
+          qos: CONFIG.qos,
+          retain: CONFIG.retain_status_topic
+        }
     })
 
     mqttClient.on('connect', function (/*connack*/) {
         debug('Connection established to MQTT server')
+        initialization_complete = true
         let topic = CONFIG.topic + '#'
         mqttClient.subscribe(topic)
-        mqttClient.subscribe('homeassistant/status')
-        mqttClient.subscribe('hass/status')
+
+        if( CONFIG.monitored_birth_topic ) {
+            mqttClient.subscribe(CONFIG.monitored_birth_topic)
+        }
+        mqttClient.publish(will_topic, 'online', { qos: CONFIG.qos, retain: CONFIG.retain_status_topic });
         initDevices(configDevices, mqttClient)
     })
 
@@ -140,6 +164,9 @@ const main = async() => {
 
     mqttClient.on('error', function (error) {
         debugError('Unable to connect to MQTT server', error)
+        if (!initialization_complete) {
+            processExit({exitCode:3}, 'Unable to connect to MQTT server:' + error.message)
+        }
     })
 
     mqttClient.on('message', function (topic, _message) {
@@ -149,9 +176,8 @@ const main = async() => {
             const topicLength = splitTopic.length
             const commandTopic = splitTopic[topicLength - 1]
             const deviceTopicLevel = splitTopic[1]
-
-            if (topic === 'homeassistant/status' || topic === 'hass/status' ) {
-                debug('Home Assistant state topic '+topic+' received message: '+message)
+            if(CONFIG.monitored_birth_topic && topic === CONFIG.monitored_birth_topic) {
+                debug('Monitored birth state topic [' + topic + '] received message: ' + message)
                 if (message === 'online') {
                     republishDevices()
                 }

@@ -21,7 +21,7 @@ Download this project to your system into any directory (example below uses /opt
 cd /opt
 
 // clone this project
-git clone https://github.com/TheAgentK/tuya-mqtt
+git clone https://github.com/mbronk/tuya-mqtt
 
 // change directory to the project directory
 cd tuya-mqtt

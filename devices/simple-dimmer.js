@@ -43,9 +43,11 @@ class SimpleDimmer extends TuyaDevice {
             }
         }
 
-        // Send home assistant discovery data and give it a second before sending state updates
-        this.initDiscovery()
-        await utils.sleep(1)
+        if (this.publish_homeassistant_discovery) {
+            // Send home assistant discovery data and give it a second before sending state updates
+            this.initDiscovery()
+            await utils.sleep(1)
+        }
 
         // Get initial states and start publishing topics
         this.getStates()
@@ -56,12 +58,12 @@ class SimpleDimmer extends TuyaDevice {
 
         const discoveryData = {
             name: (this.config.name) ? this.config.name : this.config.id,
-            state_topic: this.baseTopic+'state',
-            command_topic: this.baseTopic+'command',
-            brightness_state_topic: this.baseTopic+'brightness_state',
-            brightness_command_topic: this.baseTopic+'brightness_command',
+            state_topic: this.options.baseTopic+'state',
+            command_topic: this.options.baseTopic+'command',
+            brightness_state_topic: this.options.baseTopic+'brightness_state',
+            brightness_command_topic: this.options.baseTopic+'brightness_command',
             brightness_scale: 100,
-            availability_topic: this.baseTopic+'status',
+            availability_topic: this.options.baseTopic+'status',
             payload_available: 'online',
             payload_not_available: 'offline',
             unique_id: this.config.id,
@@ -70,7 +72,7 @@ class SimpleDimmer extends TuyaDevice {
 
         debugDiscovery('Home Assistant config topic: '+configTopic)
         debugDiscovery(discoveryData)
-        this.publishMqtt(configTopic, JSON.stringify(discoveryData))
+        this.publishMqtt({topic: configTopic, message: JSON.stringify(discoveryData)})
     }
 }
 

@@ -1,7 +1,11 @@
 {
-    "host": "localhost",
+    "host": "localhost", //mqtt server hostname
     "port": 1883,
     "topic": "tuya/",
     "mqtt_user": "",
-    "mqtt_pass": ""
+    "mqtt_pass": "",
+    "qos": 1,
+    "retain_status_topic": true,  //Set to true for <device>/status topic to be retained
+    "monitored_birth_topic": "homeassistant/status" //Topic to monitor for 'online' message (useful for a listener to announce its availability, triggers re-publish. Set to empty to disable),
+    "publish_homeassistant_discovery": true //Publish homeassistant-compatible discovery topics for each device
 }

@@ -1,6 +1,6 @@
 {
   "name": "@mbronk/tuya-mqtt",
-  "version": "3.0.4-mod.mbronk",
+  "version": "3.0.4-mod.mbronk2",
   "description": "Control Tuya devices locally via MQTT (forked)",
   "homepage": "https://github.com/mbronk/tuya-mqtt#readme",
   "main": "tuya-mqtt.js",

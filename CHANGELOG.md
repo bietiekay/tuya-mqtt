@@ -3,11 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [3.0.4-mod.mbronk]
+## [3.0.4-mod.mbronk2]
 Forked from upstream at Feb 2022. The changelist below reflects changes vs. original 3.0.4 upstream version
 
 ### Added
-- TBD
+- deviceName/status topic can now be set to retained (available also after tuya-mqtt exit). Refer to https://github.com/TheAgentK/tuya-mqtt/issues/52 for description and rationale
+- QOS setting is configurable
+- Added Last Will or Testament (LWT) topic for tuya-mqtt (tuya/script_status) which reports `online` when the script is running (and `offline` -  otherwise). Guaranteed to publish `offline` message also on script crash (mqtt broker functionality).
+- Added configuration of the monitored 'birth' channell which causes device data re-publish. Uses HomeAssistant's value by default. Set to empty to disable. For OpenHab, particularly useful with https://github.com/openhab/openhab-addons/pull/12152 incorporated.
+- Added configurable option for publishing HomeAssistant discovery state (default true)
 
 ## Changed
 - Fixes to support white-only Tuya lights (w/o 'color' DPS)

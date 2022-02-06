@@ -7,4 +7,4 @@ This fork has no intent to become an alternative to the original project, nor is
 See [CHANGELOG](CHANGELOG.md) 
 
 ### Notable changes (vs. upstream)
-TBD
+See changelog for versions suffixed with -mbronk.mod*
