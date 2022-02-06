@@ -1,0 +1,15 @@
+[
+  {
+    name: 'Tuya Device 1',
+    id: '86435357d8b123456789',
+    key: '8b2a69c9876543210'
+  },
+  {
+    name: 'Tuya Device 2',
+    id: 'eb532eea7d12345678abc',
+    key: '899810012345678',
+    ip: '192.168.0.100',
+    version: '3.3',
+    type: 'RGBTWLight'
+  }
+]

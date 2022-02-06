@@ -11,6 +11,7 @@ Forked from upstream at Feb 2022. The changelist below reflects changes vs. orig
 
 ## Changed
 - Dependencies updated to latest-available (as of 2/6/2022)
+- Housekeeping (added ESlint config, devices.conf sample, VSCode launch file, etc.)
 
 ## [3.0.0]
 The 3.0.0 release is a major refactor of the project with significant changes from previous version.  Only major additions and changes are listed below.

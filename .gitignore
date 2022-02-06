@@ -1,7 +1,9 @@
 old/
 test/
 config.json
-.vscode/
+devices.conf
+.vscode/*
+!.vscode/launch.json
 .bak
 
 # Logs

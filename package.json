@@ -35,5 +35,8 @@
   "repository": {
     "type": "git",
     "url": "git://github.com/mbronk/tuya-mqtt.git"
+  },
+  "devDependencies": {
+    "eslint": "^8.8.0"
   }
 }
