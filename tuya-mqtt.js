@@ -15,19 +15,32 @@ var CONFIG = undefined
 var tuyaDevices = new Array()
 
 // Setup Exit Handlers
-process.on('exit', processExit.bind(0))
-process.on('SIGINT', processExit.bind(0))
-process.on('SIGTERM', processExit.bind(0))
-process.on('uncaughtException', processExit.bind(1))
+process.on('exit', processExit.bind(null, {}))
+process.on('SIGINT', processExit.bind(null, {exitCode: 0}))
+process.on('SIGTERM', processExit.bind(null, {exitCode: 0}))
+process.on('uncaughtException', processExit.bind(null, {exitCode: 1}))
 
 // Disconnect from and publish offline status for all devices on exit
-async function processExit(exitCode) {
+async function processExit(options, exitReason) {
     for (let tuyaDevice of tuyaDevices) {
         tuyaDevice.device.disconnect()
     }
-    if (exitCode || exitCode === 0) debug('Exit code: '+exitCode)
+
+    const exitCode = (typeof options?.exitCode === 'number') ? options.exitCode : (typeof exitReason === 'number'? exitReason : 2) 
+
+    function printError(...args) {
+        if (debugError.enabled) { debugError.apply(this, args); }
+        else { console.error.apply(this, args) }
+    }
+    const printer = (exitCode === 0)? debug : printError;
+
     await utils.sleep(1)
-    process.exit()
+
+    printer('Exiting due to: ', exitReason)
+    printer('Exit code: ', exitCode)
+
+    process.removeAllListeners('exit') //Deregister self to avoid loop
+    process.exit(exitCode)
 }
 
 // Get new deivce based on configured type
@@ -40,13 +53,10 @@ function getDevice(configDevice, mqttClient) {
     switch (configDevice.type) {
         case 'SimpleSwitch':
             return new SimpleSwitch(deviceInfo)
-            break;
         case 'SimpleDimmer':
             return new SimpleDimmer(deviceInfo)
-            break;
         case 'RGBTWLight':
             return new RGBTWLight(deviceInfo)
-            break;
     }
     return new GenericDevice(deviceInfo)
 }
@@ -76,17 +86,17 @@ const main = async() => {
     let mqttClient
 
     try {
-        CONFIG = require('./config')
+        CONFIG = json5.parse(fs.readFileSync('./config.json', 'utf-8'))
     } catch (e) {
         console.error('Configuration file not found!')
         debugError(e)
         process.exit(1)
     }
 
-    if (typeof CONFIG.qos == 'undefined') {
+    if (typeof CONFIG.qos === undefined) {
         CONFIG.qos = 1
     }
-    if (typeof CONFIG.retain == 'undefined') {
+    if (typeof CONFIG.retain === undefined) {
         CONFIG.retain = false
     }
 
@@ -111,7 +121,7 @@ const main = async() => {
         password: CONFIG.mqtt_pass,
     })
 
-    mqttClient.on('connect', function (err) {
+    mqttClient.on('connect', function (/*connack*/) {
         debug('Connection established to MQTT server')
         let topic = CONFIG.topic + '#'
         mqttClient.subscribe(topic)
@@ -120,7 +130,7 @@ const main = async() => {
         initDevices(configDevices, mqttClient)
     })
 
-    mqttClient.on('reconnect', function (error) {
+    mqttClient.on('reconnect', function () {
         if (mqttClient.connected) {
             debug('Connection to MQTT server lost. Attempting to reconnect...')
         } else {
@@ -129,12 +139,12 @@ const main = async() => {
     })
 
     mqttClient.on('error', function (error) {
-        debug('Unable to connect to MQTT server', error)
+        debugError('Unable to connect to MQTT server', error)
     })
 
-    mqttClient.on('message', function (topic, message) {
+    mqttClient.on('message', function (topic, _message) {
         try {
-            message = message.toString()
+            const message = _message.toString()
             const splitTopic = topic.split('/')
             const topicLength = splitTopic.length
             const commandTopic = splitTopic[topicLength - 1]
@@ -162,8 +172,10 @@ const main = async() => {
                         device.processDpsCommand(message)
                         break;
                     case 5:
-                        const dpsKey = splitTopic[topicLength-2]
-                        device.processDpsKeyCommand(message, dpsKey)
+                        {
+                            const dpsKey = splitTopic[topicLength-2]
+                            device.processDpsKeyCommand(message, dpsKey)
+                        }
                         break;
                 }
             }

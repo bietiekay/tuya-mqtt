@@ -140,7 +140,7 @@ class RGBTWLight extends TuyaDevice {
     }
 
     async guessLightInfo() {
-        this.guess = new Object()
+        this.guess = {}
         debug('Attempting to detect light capabilites and DPS values...')
         debug('Querying DPS 2 for white/color mode setting...')
 

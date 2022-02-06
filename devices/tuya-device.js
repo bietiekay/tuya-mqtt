@@ -1,4 +1,5 @@
 const TuyAPI = require('tuyapi')
+// @ts-ignore
 const { evaluate } = require('mathjs')
 const utils = require('../lib/utils')
 const debug = require('debug')('tuya-mqtt:tuyapi')
@@ -11,6 +12,8 @@ class TuyaDevice {
         this.config = deviceInfo.configDevice
         this.mqttClient = deviceInfo.mqttClient
         this.topic = deviceInfo.topic
+
+        this.isRgbtwLight = undefined //Redefined in child classes
 
         // Build TuyAPI device options from device config info
         this.options = {
@@ -107,6 +110,17 @@ class TuyaDevice {
         })
     }
 
+    /**
+     * Init
+     * 
+     * @abstract
+     * @void
+     */
+    async init(){
+        throw "Abstract method init not implemented";
+    }
+
+
     // Get and update cached values of all configured/known dps value for device
     async getStates() {
         // Suppress topic updates while syncing device state with cached state
@@ -138,10 +152,10 @@ class TuyaDevice {
                         'updated': true
                     }
                 }
-                if (this.isRgbtwLight) {
-                    if (this.config.hasOwnProperty('dpsColor') && this.config.dpsColor == key) {
+                if (this.isRgbtwLight) {  // Same as: this.constructor.name ===  "RGBTWLight"
+                    if ('dpsColor' in this.config && this.config.dpsColor == key) {
                         this.updateColorState(data.dps[key])
-                    } else if (this.config.hasOwnProperty('dpsMode') && this.config.dpsMode == key) {
+                    } else if ('dpsMode' in this.config && this.config.dpsMode == key) {
                         // If color/white mode is changing, force sending color state
                         // Allows overriding saturation value to 0% for white mode for the HSB device topics
                         this.dps[this.config.dpsColor].updated = true
@@ -200,7 +214,7 @@ class TuyaDevice {
                 // Only publish values if different from previous value
                 if (this.dps[key].updated) {
                     const dpsKeyTopic = dpsTopic + '/' + key + '/state'
-                    const data = this.dps.hasOwnProperty(key) ? this.dps[key].val.toString() : 'None'
+                    const data = key in this.dps ? this.dps[key].val?.toString() : 'None'
                     debugState('MQTT DPS'+key+': '+dpsKeyTopic+' -> ', data)
                     this.publishMqtt(dpsKeyTopic, data, false)
                     this.dps[key].updated = false
@@ -224,14 +238,16 @@ class TuyaDevice {
                 break;
             case 'hsb':
             case 'hsbhex':
-                // Return comma separate array of component values for specific topic
-                state = new Array()
-                const components = deviceTopic.components.split(',')
-                for (let i in components) {
-                    // If light is in white mode always report saturation 0%, otherwise report actual value
-                    state.push((components[i] === 's' && this.dps[this.config.dpsMode].val === 'white') ? 0 : this.color[components[i]])
+                {
+                    // Return comma separate array of component values for specific topic
+                    state = new Array()
+                    const components = deviceTopic.components.split(',')
+                    for (let i in components) {
+                        // If light is in white mode always report saturation 0%, otherwise report actual value
+                        state.push((components[i] === 's' && this.dps[this.config.dpsMode].val === 'white') ? 0 : this.color[components[i]])
+                    }
+                    state = (state.join(','))
                 }
-                state = (state.join(','))
                 break;
             case 'str':
                 state = value ? value : ''
@@ -250,7 +266,7 @@ class TuyaDevice {
         // Perform any required math transforms before returing command value
         switch (deviceTopic.type) {
             case 'int':
-                value = (deviceTopic.stateMath) ? parseInt(Math.round(evaluate(value+deviceTopic.stateMath))) : parseInt(value)
+                value = (deviceTopic.stateMath) ? Math.round(evaluate(value+deviceTopic.stateMath)) : parseInt(value)
                 break;
             case 'float':
                 value = (deviceTopic.stateMath) ? parseFloat(evaluate(value+deviceTopic.stateMath)) : parseFloat(value)
@@ -286,7 +302,7 @@ class TuyaDevice {
     processDeviceCommand(command, commandTopic) {
         // Determine state topic from command topic to find proper template
         const stateTopic = commandTopic.replace('command', 'state')
-        const deviceTopic = this.deviceTopics.hasOwnProperty(stateTopic) ? this.deviceTopics[stateTopic] : ''
+        const deviceTopic = stateTopic in this.deviceTopics ? this.deviceTopics[stateTopic] : ''
 
         if (deviceTopic) {
             debugCommand('Device '+this.options.id+' received command topic: '+commandTopic+', message: '+command)
@@ -342,7 +358,7 @@ class TuyaDevice {
     // Set state based on command topic
     sendTuyaCommand(message, deviceTopic) {
         let command = message.toLowerCase()
-        const tuyaCommand = new Object()
+        const tuyaCommand = {};
         tuyaCommand.dps = deviceTopic.key
         switch (deviceTopic.type) {
             case 'bool':
@@ -410,11 +426,11 @@ class TuyaDevice {
         // Check if it's a number and it's not outside of defined range
         if (isNaN(command)) {
             return invalid
-        } else if (deviceTopic.hasOwnProperty('topicMin') && command < deviceTopic.topicMin) {
+        } else if ('topicMin' in deviceTopic && command < deviceTopic.topicMin) {
             debugError('Received command value "'+command+'" that is less than the configured minimum value')
             debugError('Overriding command with minimum value '+deviceTopic.topicMin)
             command = deviceTopic.topicMin
-        } else if (deviceTopic.hasOwnProperty('topicMax') && command > deviceTopic.topicMax) {
+        } else if ('topicMax' in deviceTopic && command > deviceTopic.topicMax) {
             debugError('Received command value "'+command+'" that is greater than the configured maximum value')
             debugError('Overriding command with maximum value: '+deviceTopic.topicMax)
             command = deviceTopic.topicMax
@@ -424,7 +440,7 @@ class TuyaDevice {
         switch (deviceTopic.type) {
             case 'int':
                 if (deviceTopic.commandMath) {
-                    value = parseInt(Math.round(evaluate(command+deviceTopic.commandMath)))
+                    value = Math.round(evaluate(command+deviceTopic.commandMath))
                 } else {
                     value = parseInt(command)
                 }
@@ -459,7 +475,7 @@ class TuyaDevice {
         }
 
         // Initialize the command color values with existing color state
-        if (!this.hasOwnProperty('cmdColor')) {
+        if (! Object.prototype.hasOwnProperty.call(this, 'cmdColor')) {
             this.cmdColor = {
                 'h': this.color.h,
                 's': this.color.s,
@@ -569,7 +585,7 @@ class TuyaDevice {
 
     set(command) {
         debug('Set device '+this.options.id+' -> '+JSON.stringify(command))
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve /*, reject*/) => {
             this.device.set(command).then((result) => {
                 resolve(result)
             })
@@ -584,7 +600,7 @@ class TuyaDevice {
             debug('Found device id '+this.options.id)
             // Attempt connection to device
             this.device.connect().catch((error) => {
-                debugError(error.message)
+                debugError('Error when connecting to device [' + this.options.id + ']: ' + error.message)
                 this.reconnect()
             })
         }).catch(async (error) => {

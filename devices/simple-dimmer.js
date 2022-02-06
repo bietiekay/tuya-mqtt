@@ -1,4 +1,5 @@
 const TuyaDevice = require('./tuya-device')
+// eslint-disable-next-line no-unused-vars
 const debug = require('debug')('tuya-mqtt:device')
 const debugDiscovery = require('debug')('tuya-mqtt:discovery')
 const utils = require('../lib/utils')

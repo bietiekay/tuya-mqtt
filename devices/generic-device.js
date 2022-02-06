@@ -7,7 +7,7 @@ class GenericDevice extends TuyaDevice {
         this.deviceData.mdl = 'Generic Device'
 
         // Check if custom template in device config
-        if (this.config.hasOwnProperty('template')) {
+        if ('template' in this.config) {
             // Map generic DPS topics to device specific topic names
             this.deviceTopics = this.config.template
         } else {
