@@ -10,6 +10,7 @@ Forked from upstream at Feb 2022. The changelist below reflects changes vs. orig
 - TBD
 
 ## Changed
+- Fixes to support white-only Tuya lights (w/o 'color' DPS)
 - Dependencies updated to latest-available (as of 2/6/2022)
 - Housekeeping (added ESlint config, devices.conf sample, VSCode launch file, etc.)
 - Fixed minor ESLint errors && updated at-exit handler to print stacktrace on error (and fallback to console if not running with debug enabled) 

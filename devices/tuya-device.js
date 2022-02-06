@@ -158,7 +158,9 @@ class TuyaDevice {
                     } else if ('dpsMode' in this.config && this.config.dpsMode == key) {
                         // If color/white mode is changing, force sending color state
                         // Allows overriding saturation value to 0% for white mode for the HSB device topics
-                        this.dps[this.config.dpsColor].updated = true
+                        if ('dpsColor' in this.config && this.dps[this.config.dpsColor]) {  //White-only Lights do not have dpsColor
+                            this.dps[this.config.dpsColor].updated = true
+                        }
                     }
                 }
             }
