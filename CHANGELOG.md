@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [3.0.4-mod.mbronk]
+Forked from upstream at Feb 2022. The changelist below reflects changes vs. original 3.0.4 upstream version
+
+### Added
+- TBD
+
+## Changed
+- TBD
+
 ## [3.0.0]
 The 3.0.0 release is a major refactor of the project with significant changes from previous version.  Only major additions and changes are listed below.
 ### Added
