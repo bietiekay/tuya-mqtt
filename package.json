@@ -5,7 +5,10 @@
   "homepage": "https://github.com/mbronk/tuya-mqtt#readme",
   "main": "tuya-mqtt.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "eslint . --ext .js  --ignore-pattern node_modules/",
+    "start": "node tuya-mqtt.js",
+    "startVerbose": "DEBUG=tuya-mqtt:* node tuya-mqtt.js"
   },
   "author": {
     "name": "mbronk",
@@ -38,5 +41,9 @@
   },
   "devDependencies": {
     "eslint": "^8.8.0"
+  },
+  "engines": {
+    "npm": ">=6.0.0",
+    "node": ">=14.0.0"
   }
 }

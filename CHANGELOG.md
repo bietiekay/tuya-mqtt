@@ -12,6 +12,7 @@ Forked from upstream at Feb 2022. The changelist below reflects changes vs. orig
 - Added Last Will or Testament (LWT) topic for tuya-mqtt (tuya/script_status) which reports `online` when the script is running (and `offline` -  otherwise). Guaranteed to publish `offline` message also on script crash (mqtt broker functionality).
 - Added configuration of the monitored 'birth' channell which causes device data re-publish. Uses HomeAssistant's value by default. Set to empty to disable. For OpenHab, particularly useful with https://github.com/openhab/openhab-addons/pull/12152 incorporated.
 - Added configurable option for publishing HomeAssistant discovery state (default true)
+- Node runtime version requirement set to v14 min (due to use of optional chaining operator) & matching npm v6 min
 
 ## Changed
 - Fixes to support white-only Tuya lights (w/o 'color' DPS)
