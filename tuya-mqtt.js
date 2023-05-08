@@ -131,6 +131,8 @@ const main = async() => {
     mqttClient = mqtt.connect({
         host: CONFIG.host,
         port: CONFIG.port,
+        protocol: CONFIG.protocol,
+        rejectUnauthorized: CONFIG.rejectUnauthorized,
         username: CONFIG.mqtt_user,
         password: CONFIG.mqtt_pass,
         will: {

@@ -1,6 +1,8 @@
 {
     "host": "localhost", //mqtt server hostname
     "port": 1883,
+    "protocol": "mqtts",
+    "rejectUnauthorized": false,
     "topic": "tuya/",
     "mqtt_user": "",
     "mqtt_pass": "",
