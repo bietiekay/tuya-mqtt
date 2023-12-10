@@ -1,13 +1,20 @@
 const TuyaDevice = require('./tuya-device')
 const debug = require('debug')('tuya-mqtt:device-detect')
+const debugError = require('debug')('tuya-mqtt:device-detect:error')
 const debugDiscovery = require('debug')('tuya-mqtt:discovery')
 const utils = require('../lib/utils')
 
 class RGBTWLight extends TuyaDevice {
     async init() {
         // If no manual config try to detect device settings
-        if (!this.config.dpsPower) { 
-            await this.guessLightInfo()
+        if (!this.config.dpsPower) {
+            try {
+                await this.guessLightInfo()
+            } catch(error) {
+                debugError("Error guessing light info: " + error)
+            }
+        } else {
+            this.guess = {}
         }
 
         // If detection failed and no manual config return without initializing

@@ -192,20 +192,24 @@ const main = async() => {
 
                 // Use device topic level to find matching device
                 const device = tuyaDevices.find(d => d.options.name === deviceTopicLevel || d.options.id === deviceTopicLevel)
-                switch (topicLength) {
-                    case 3:
-                        device.processCommand(message, commandTopic)
-                        break;
-                    case 4:
-                        device.processDpsCommand(message)
-                        break;
-                    case 5:
-                        {
-                            const dpsKey = splitTopic[topicLength-2]
-                            device.processDpsKeyCommand(message, dpsKey)
-                        }
-                        break;
-                }
+		if (device === undefined) {
+			debugError("Received command for unrecognized device topic: " + deviceTopicLevel)
+		} else {
+                    switch (topicLength) {
+                        case 3:
+                            device.processCommand(message, commandTopic)
+                            break;
+                        case 4:
+                            device.processDpsCommand(message)
+                            break;
+                        case 5:
+                            {
+                                const dpsKey = splitTopic[topicLength-2]
+                                device.processDpsKeyCommand(message, dpsKey)
+                            }
+                            break;
+                    }
+		}
             }
         } catch (e) {
             debugError(e)

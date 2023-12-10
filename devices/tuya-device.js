@@ -6,6 +6,7 @@ const debug = require('debug')('tuya-mqtt:tuyapi')
 const debugState = require('debug')('tuya-mqtt:state')
 const debugCommand = require('debug')('tuya-mqtt:command')
 const debugError = require('debug')('tuya-mqtt:error')
+const debugErrorDevice = require('debug')('tuya-mqtt:device:error')
 
 class TuyaDevice {
     static getDeviceOptions(baseTopic, configDevice) {
@@ -108,7 +109,7 @@ class TuyaDevice {
 
         // On connect error call reconnect
         this.device.on('error', async (err) => {
-            debugError(err)
+            debugErrorDevice(err)
             await utils.sleep(1)
             this.reconnect()
         })
@@ -611,10 +612,17 @@ class TuyaDevice {
         this.device.find().then(() => {
             debug('Found device id '+this.options.id)
             // Attempt connection to device
-            this.device.connect().catch((error) => {
-                debugError('Error when connecting to device [' + this.options.id + ']: ' + error.message)
-                this.reconnect()
-            })
+            this.device.connect()
+                .then((connected) => {
+                    if(!connected) {
+                        debugError('Error when connecting to device [' + this.options.id + ']: Is connected: ' + connected)
+                        this.reconnect()
+                    }
+                })
+                .catch((error) => {
+                    debugError('Error when connecting to device [' + this.options.id + ']: ' + error.message)
+                    this.reconnect()
+                })
         }).catch(async (error) => {
             debugError(error.message)
             debugError('Will attempt to find device again in 60 seconds')

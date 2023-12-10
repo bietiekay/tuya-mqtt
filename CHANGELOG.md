@@ -3,7 +3,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
-## [3.0.4-mod.mbronk2]
+## [3.0.4-mod.mbronk.4]
+Minor stability fixes
+
+### Changed
+- failure to 'guess' device properties for an offline device (after built in repeat) no longer crashes the script
+
+## [3.0.4-mod.mbronk.3]
 Forked from upstream at Feb 2022. The changelist below reflects changes vs. original 3.0.4 upstream version
 
 ### Added
