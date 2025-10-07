@@ -16,11 +16,47 @@ var tuyaDevices = new Array()
 var mqttClient = undefined
 var will_topic = undefined
 
+// Determine if an error is a non-fatal Tuya TCP connection refusal to port 6668
+function isIgnorableTuyaConnRefused(err) {
+    try {
+        if (!err) { return false }
+        const message = (err && err.message) ? err.message : String(err)
+        if (message && message.includes('ECONNREFUSED') && message.includes('6668')) { return true }
+        if (err.code === 'ECONNREFUSED' && (err.port === 6668 || (message && message.includes('6668')))) { return true }
+        const subErrors = Array.isArray(err.errors) ? err.errors : []
+        if (subErrors.length) {
+            const allConnRefused6668 = subErrors.every(e => {
+                const m = (e && e.message) ? e.message : String(e)
+                return (e && e.code === 'ECONNREFUSED' && (e.port === 6668 || (m && m.includes('6668'))))
+            })
+            if (allConnRefused6668) { return true }
+        }
+        return false
+    } catch (_e) {
+        return false
+    }
+}
+
 // Setup Exit Handlers
 process.on('exit', processExit.bind(null, {}))
 process.on('SIGINT', processExit.bind(null, {exitCode: 0}))
 process.on('SIGTERM', processExit.bind(null, {exitCode: 0}))
-process.on('uncaughtException', processExit.bind(null, {exitCode: 1}))
+process.on('uncaughtException', (err) => {
+    if (isIgnorableTuyaConnRefused(err)) {
+        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection error: ' + (err && err.message ? err.message : err)) }
+        else { console.error('Ignoring non-fatal Tuya connection error:', (err && err.message ? err.message : err)) }
+        return
+    }
+    processExit({exitCode: 1}, err)
+})
+process.on('unhandledRejection', (reason /*, promise*/) => {
+    if (isIgnorableTuyaConnRefused(reason)) {
+        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection rejection: ' + (reason && reason.message ? reason.message : reason)) }
+        else { console.error('Ignoring non-fatal Tuya connection rejection:', (reason && reason.message ? reason.message : reason)) }
+        return
+    }
+    processExit({exitCode: 1}, reason)
+})
 
 // Disconnect from and publish offline status for all devices on exit
 async function processExit(options, exitReason) {
