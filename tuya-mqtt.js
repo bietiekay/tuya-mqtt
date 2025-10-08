@@ -45,18 +45,14 @@ process.on('SIGINT', processExit.bind(null, {exitCode: 0}))
 process.on('SIGTERM', processExit.bind(null, {exitCode: 0}))
 process.on('uncaughtException', (err) => {
     if (isIgnorableTuyaConnRefused(err)) {
-        const errMsg = (typeof err === 'object' && err && 'message' in err) ? err.message : String(err)
-        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection error: ' + errMsg) }
-        else { console.error('Ignoring non-fatal Tuya connection error:', errMsg) }
+        // Fully suppress ignorable Tuya connection errors to avoid noisy logs
         return
     }
     processExit({exitCode: 1}, err)
 })
 process.on('unhandledRejection', (reason /*, promise*/) => {
     if (isIgnorableTuyaConnRefused(reason)) {
-        const reasonMsg = (typeof reason === 'object' && reason && 'message' in reason) ? reason.message : String(reason)
-        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection rejection: ' + reasonMsg) }
-        else { console.error('Ignoring non-fatal Tuya connection rejection:', reasonMsg) }
+        // Fully suppress ignorable Tuya connection rejections to avoid noisy logs
         return
     }
     processExit({exitCode: 1}, reason)

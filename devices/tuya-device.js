@@ -8,6 +8,12 @@ const debugCommand = require('debug')('tuya-mqtt:command')
 const debugError = require('debug')('tuya-mqtt:error')
 const debugErrorDevice = require('debug')('tuya-mqtt:device:error')
 
+function isLoopbackAddress(address) {
+    if (!address) { return false }
+    const a = String(address).toLowerCase()
+    return a === '::1' || a === 'localhost' || a.startsWith('127.')
+}
+
 class TuyaDevice {
     static getDeviceOptions(baseTopic, configDevice) {
         // Build TuyAPI device options from device config info
@@ -47,6 +53,9 @@ class TuyaDevice {
         // Build TuyAPI device options from device config info
         this.options = TuyaDevice.getDeviceOptions(this.topic, this.config)
 
+        // If configured IP is loopback, disable attempts entirely
+        this.disabledDueToInvalidIp = !!(this.options.ip && isLoopbackAddress(this.options.ip))
+
         // Set default device data for Home Assistant device registry
         // Values may be overridden by individual devices
         this.deviceData = { 
@@ -81,9 +90,13 @@ class TuyaDevice {
             }
         })
 
-        // Attempt to find/connect to device and start heartbeat monitor
-        this.connectDevice()
-        this.monitorHeartbeat()
+        // Attempt to find/connect to device and start heartbeat monitor unless disabled
+        if (!this.disabledDueToInvalidIp) {
+            this.connectDevice()
+            this.monitorHeartbeat()
+        } else {
+            debug('Skipping device due to loopback IP: ' + this.toString())
+        }
 
         // On connect perform device specific init
         this.device.on('connected', async () => {
@@ -109,6 +122,17 @@ class TuyaDevice {
 
         // On connect error call reconnect
         this.device.on('error', async (err) => {
+            // If connection is being attempted to loopback Tuya port, disable further retries for this device
+            try {
+                const isRefused = (err && err.code === 'ECONNREFUSED')
+                const onTuyaPort = (err && (err.port === 6668))
+                const loopback = (err && isLoopbackAddress(err.address))
+                if (isRefused && onTuyaPort && loopback) {
+                    this.disabledDueToInvalidIp = true
+                    debug('Disabling device after loopback refusal on Tuya port: ' + this.toString())
+                    return
+                }
+            } catch (_e) { }
             debugErrorDevice(err)
             await utils.sleep(1)
             this.reconnect()
@@ -607,6 +631,7 @@ class TuyaDevice {
 
     // Search for and connect to device
     connectDevice() {
+        if (this.disabledDueToInvalidIp) { return }
         // Find device on network
         debug('Search for device id '+this.options.id)
         this.device.find().then(() => {
@@ -634,6 +659,7 @@ class TuyaDevice {
     // Retry connection every 10 seconds if unable to connect
     async reconnect() {
         if (!this.reconnecting) {
+            if (this.disabledDueToInvalidIp) { return }
             this.reconnecting = true
             debugError('Error connecting to device id '+this.options.id+'...retry in 10 seconds.')
             await utils.sleep(10)
