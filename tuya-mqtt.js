@@ -5,6 +5,8 @@ const json5 = require('json5')
 const debug = require('debug')('tuya-mqtt:info')
 const debugCommand = require('debug')('tuya-mqtt:command')
 const debugError = require('debug')('tuya-mqtt:error')
+const dns = require('dns').promises
+const net = require('net')
 const SimpleSwitch = require('./devices/simple-switch')
 const SimpleDimmer = require('./devices/simple-dimmer')
 const RGBTWLight = require('./devices/rgbtw-light')
@@ -43,16 +45,18 @@ process.on('SIGINT', processExit.bind(null, {exitCode: 0}))
 process.on('SIGTERM', processExit.bind(null, {exitCode: 0}))
 process.on('uncaughtException', (err) => {
     if (isIgnorableTuyaConnRefused(err)) {
-        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection error: ' + (err && err.message ? err.message : err)) }
-        else { console.error('Ignoring non-fatal Tuya connection error:', (err && err.message ? err.message : err)) }
+        const errMsg = (typeof err === 'object' && err && 'message' in err) ? err.message : String(err)
+        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection error: ' + errMsg) }
+        else { console.error('Ignoring non-fatal Tuya connection error:', errMsg) }
         return
     }
     processExit({exitCode: 1}, err)
 })
 process.on('unhandledRejection', (reason /*, promise*/) => {
     if (isIgnorableTuyaConnRefused(reason)) {
-        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection rejection: ' + (reason && reason.message ? reason.message : reason)) }
-        else { console.error('Ignoring non-fatal Tuya connection rejection:', (reason && reason.message ? reason.message : reason)) }
+        const reasonMsg = (typeof reason === 'object' && reason && 'message' in reason) ? reason.message : String(reason)
+        if (debugError.enabled) { debugError('Ignoring non-fatal Tuya connection rejection: ' + reasonMsg) }
+        else { console.error('Ignoring non-fatal Tuya connection rejection:', reasonMsg) }
         return
     }
     processExit({exitCode: 1}, reason)
@@ -109,6 +113,62 @@ function initDevices(configDevices, mqttClient) {
     }
 }
 
+// Filter out devices with loopback or unresolvable IPs so they are not even tried
+async function filterInvalidDevices(configDevices) {
+    function isLoopback(address) {
+        if (!address) { return false }
+        const a = String(address).toLowerCase()
+        return a === '::1' || a === 'localhost' || a.startsWith('127.')
+    }
+
+    async function resolveIfHostname(ipOrHost) {
+        if (!ipOrHost) { return null }
+        const value = String(ipOrHost).trim()
+        if (!value) { return null }
+        if (net.isIP(value)) { return value }
+        try {
+            const res = await dns.lookup(value)
+            return res && res.address ? res.address : (typeof res === 'string' ? res : null)
+        } catch (_e) {
+            return null
+        }
+    }
+
+    const filtered = []
+    for (const cfg of configDevices) {
+        try {
+            if (!cfg.ip) { filtered.push(cfg); continue }
+            const original = String(cfg.ip).trim()
+            if (!original) { filtered.push(cfg); continue }
+
+            // Fast path loopback literals/aliases
+            if (isLoopback(original)) {
+                debug('Ignoring device due to loopback IP:', (cfg.name || cfg.id), '->', original)
+                continue
+            }
+
+            // Resolve hostnames; skip if unresolvable or resolves to loopback
+            const resolved = await resolveIfHostname(original)
+            if (!resolved) {
+                debug('Ignoring device; IP/hostname could not be resolved:', (cfg.name || cfg.id), '->', original)
+                continue
+            }
+            if (isLoopback(resolved)) {
+                debug('Ignoring device; hostname resolves to loopback:', (cfg.name || cfg.id), original, '->', resolved)
+                continue
+            }
+
+            // Normalize IP to resolved address
+            cfg.ip = resolved
+            filtered.push(cfg)
+        } catch (_err) {
+            // On unexpected errors, keep device rather than over-blocking
+            filtered.push(cfg)
+        }
+    }
+    return filtered
+}
+
 // Republish devices 2x with 30 seconds sleep if restart of HA is detected
 async function republishDevices() {
     for (let i = 0; i < 2; i++) {
@@ -159,6 +219,13 @@ const main = async() => {
     if (!configDevices.length) {
         console.error('No devices found in devices file!')
         process.exit(1)
+    }
+
+    // Skip devices with invalid/loopback IPs so they are not even attempted
+    try {
+        configDevices = await filterInvalidDevices(configDevices)
+    } catch (e) {
+        debugError('Error while validating device IPs:', e)
     }
 
     will_topic = CONFIG.topic + 'script_status'
