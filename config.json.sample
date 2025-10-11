@@ -9,5 +9,11 @@
     "qos": 1,
     "retain_status_topic": true,  //Set to true for <device>/status topic to be retained
     "monitored_birth_topic": "homeassistant/status" //Topic to monitor for 'online' message (useful for a listener to announce its availability, triggers re-publish. Set to empty to disable),
-    "publish_homeassistant_discovery": true //Publish homeassistant-compatible discovery topics for each device
+    "publish_homeassistant_discovery": true, //Publish homeassistant-compatible discovery topics for each device
+    "device_retry": {
+        "initial_seconds": 10,   // initial backoff for offline devices
+        "max_seconds": 600,      // max backoff cap
+        "multiplier": 1.8,       // exponential growth factor
+        "jitter_seconds": 2      // random jitter added to avoid thundering herd
+    }
 }

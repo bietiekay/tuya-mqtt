@@ -29,6 +29,27 @@ cd tuya-mqtt
 //installs this project along with codetheweb/tuyapi project
 npm install
 ```
+### Offline device behavior and retry/backoff
+
+When devices are offline or unreachable (e.g., network down, unplugged), the service now:
+
+- Handles transient network errors (timeouts, EHOSTUNREACH, ENETUNREACH, ECONNREFUSED on port 6668) without exiting the process.
+- Retries per device using exponential backoff with jitter to reduce CPU/log churn.
+- Publishes `<device>/status` as `offline` when disconnected and `online` on reconnect.
+
+Backoff parameters are configurable via `config.json` under `device_retry`:
+
+```
+"device_retry": {
+  "initial_seconds": 10,
+  "max_seconds": 600,
+  "multiplier": 1.8,
+  "jitter_seconds": 2
+}
+```
+
+Omit values to use defaults. The backoff timer resets after a successful connection.
+
 
 ## Configuration
 Tuya-mqtt has two different configuration files.  The first is config.json, a simple file which contains settings for connection to the MQTT broker.  The second is devices.conf, a JSON5 formatted file which defines the Tuya devices that the script should connect to and expose via MQTT.  This file uses the same basic format as the "tuya-cli wizard" outputs when used to acquire the device keys, so it can be used as the basis for your tuya-mqtt device configuration.

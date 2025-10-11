@@ -18,18 +18,32 @@ var tuyaDevices = new Array()
 var mqttClient = undefined
 var will_topic = undefined
 
-// Determine if an error is a non-fatal Tuya TCP connection refusal to port 6668
+// Determine if an error is a non-fatal Tuya network connectivity error
 function isIgnorableTuyaConnRefused(err) {
     try {
         if (!err) { return false }
         const message = (err && err.message) ? err.message : String(err)
+        // ECONNREFUSED to Tuya local port is expected when devices are offline
         if (message && message.includes('ECONNREFUSED') && message.includes('6668')) { return true }
         if (err.code === 'ECONNREFUSED' && (err.port === 6668 || (message && message.includes('6668')))) { return true }
+        // Common transient/unreachable network errors should not crash the process
+        const transientCodes = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EAI_AGAIN'])
+        if (err.code && transientCodes.has(err.code)) { return true }
+        if (message) {
+            const lower = message.toLowerCase()
+            if (lower.includes('connection timed out') || lower.includes('connect ehostunreach') || lower.includes('network is unreachable')) {
+                return true
+            }
+        }
         const subErrors = Array.isArray(err.errors) ? err.errors : []
         if (subErrors.length) {
             const allConnRefused6668 = subErrors.every(e => {
                 const m = (e && e.message) ? e.message : String(e)
-                return (e && e.code === 'ECONNREFUSED' && (e.port === 6668 || (m && m.includes('6668'))))
+                const code = e && e.code
+                if (code && transientCodes.has(code)) { return true }
+                const mLower = (m || '').toLowerCase()
+                if (mLower.includes('connection timed out') || mLower.includes('connect ehostunreach') || mLower.includes('network is unreachable')) { return true }
+                return (e && code === 'ECONNREFUSED' && (e.port === 6668 || (m && m.includes('6668'))))
             })
             if (allConnRefused6668) { return true }
         }
@@ -89,7 +103,8 @@ function getDevice(configDevice, mqttClient) {
         topic: CONFIG.topic,
         qos: CONFIG.qos,
         retain_status_topic: CONFIG.retain_status_topic,
-        publish_homeassistant_discovery: CONFIG.publish_homeassistant_discovery 
+        publish_homeassistant_discovery: CONFIG.publish_homeassistant_discovery,
+        retry: CONFIG.device_retry
     }
     switch (configDevice.type) {
         case 'SimpleSwitch':
@@ -201,6 +216,12 @@ const main = async() => {
     if (typeof CONFIG.publish_homeassistant_discovery === 'undefined') {
         CONFIG.publish_homeassistant_discovery = true
     }
+    // Configure device retry/backoff defaults
+    if (!CONFIG.device_retry) { CONFIG.device_retry = {} }
+    if (typeof CONFIG.device_retry.initial_seconds === 'undefined') { CONFIG.device_retry.initial_seconds = 10 }
+    if (typeof CONFIG.device_retry.max_seconds === 'undefined') { CONFIG.device_retry.max_seconds = 600 }
+    if (typeof CONFIG.device_retry.multiplier === 'undefined') { CONFIG.device_retry.multiplier = 1.8 }
+    if (typeof CONFIG.device_retry.jitter_seconds === 'undefined') { CONFIG.device_retry.jitter_seconds = 2 }
     
 
     try {

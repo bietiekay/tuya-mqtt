@@ -47,6 +47,12 @@ class TuyaDevice {
         this.qos = deviceInfo.qos
         this.retain_status_topic = deviceInfo.retain_status_topic
         this.publish_homeassistant_discovery = deviceInfo.publish_homeassistant_discovery
+        this.retry = Object.assign({
+            initial_seconds: 10,
+            max_seconds: 600,
+            multiplier: 1.8,
+            jitter_seconds: 2
+        }, deviceInfo.retry || {})
 
         this.isRgbtwLight = undefined //Redefined in child classes
 
@@ -74,6 +80,7 @@ class TuyaDevice {
         // Missed heartbeat monitor
         this.heartbeatsMissed = 0
         this.reconnecting = false
+        this.currentBackoffSeconds = this.retry.initial_seconds
 
         // Create the new Tuya Device
         this.device = new TuyAPI(JSON.parse(JSON.stringify(this.options)))
@@ -106,6 +113,8 @@ class TuyaDevice {
             if (this.device.isConnected()) {
                 debug('Connected to device ' + this.toString())
                 this.heartbeatsMissed = 0
+                // Reset backoff on successful connection
+                this.currentBackoffSeconds = this.retry.initial_seconds
                 this.publishMqtt({topic: this.options.baseTopic+'status', message: 'online', _retain: this.retain_status_topic})
                 this.init()
             }
@@ -133,7 +142,21 @@ class TuyaDevice {
                     return
                 }
             } catch (_e) { }
-            debugErrorDevice(err)
+            // Demote expected transient network errors to info-level to reduce log spam
+            try {
+                const code = err && err.code
+                const message = (err && err.message) ? err.message : String(err)
+                const transientCodes = new Set(['EHOSTUNREACH', 'ENETUNREACH', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNREFUSED'])
+                const onTuyaPort = (err && (err.port === 6668))
+                const isTransient = (code && transientCodes.has(code)) || (message && /timed out|unreach/i.test(message))
+                if (isTransient && (onTuyaPort || code !== 'ECONNREFUSED')) {
+                    debug('Transient Tuya network error for ' + this.toString() + ': ' + message)
+                } else {
+                    debugErrorDevice(err)
+                }
+            } catch (_e) {
+                debugErrorDevice(err)
+            }
             await utils.sleep(1)
             this.reconnect()
         })
@@ -629,8 +652,8 @@ class TuyaDevice {
         })
     }
 
-    // Search for and connect to device
-    connectDevice() {
+        // Search for and connect to device
+        connectDevice() {
         if (this.disabledDueToInvalidIp) { return }
         // Find device on network
         debug('Search for device id '+this.options.id)
@@ -650,20 +673,40 @@ class TuyaDevice {
                 })
         }).catch(async (error) => {
             debugError(error.message)
-            debugError('Will attempt to find device again in 60 seconds')
-            await utils.sleep(60)
+                // Use backoff schedule for find() failures too
+                const base = Math.min(this.currentBackoffSeconds, this.retry.max_seconds)
+                const jitter = Math.random() * this.retry.jitter_seconds
+                const waitSeconds = Math.max(5, Math.floor(base + jitter))
+                debugError('Will attempt to find device again in ' + waitSeconds + ' seconds')
+                await utils.sleep(waitSeconds)
+                this.currentBackoffSeconds = Math.min(
+                    Math.ceil(this.currentBackoffSeconds * this.retry.multiplier),
+                    this.retry.max_seconds
+                )
             this.connectDevice()
         })
     }
 
-    // Retry connection every 10 seconds if unable to connect
+    // Retry connection with exponential backoff if unable to connect
     async reconnect() {
-        if (!this.reconnecting) {
-            if (this.disabledDueToInvalidIp) { return }
-            this.reconnecting = true
-            debugError('Error connecting to device id '+this.options.id+'...retry in 10 seconds.')
-            await utils.sleep(10)
+        if (this.reconnecting) { return }
+        if (this.disabledDueToInvalidIp) { return }
+
+        this.reconnecting = true
+        try {
+            // Cap and add jitter
+            const base = Math.min(this.currentBackoffSeconds, this.retry.max_seconds)
+            const jitter = Math.random() * this.retry.jitter_seconds
+            const waitSeconds = Math.max(1, Math.floor(base + jitter))
+            debugError('Error connecting to device id '+this.options.id+'...retry in '+waitSeconds+' seconds.')
+            await utils.sleep(waitSeconds)
             this.connectDevice()
+            // Increase backoff for next time; reset on successful connection in 'connected' handler
+            this.currentBackoffSeconds = Math.min(
+                Math.ceil(this.currentBackoffSeconds * this.retry.multiplier),
+                this.retry.max_seconds
+            )
+        } finally {
             this.reconnecting = false
         }
     }
